@@ -1,0 +1,20 @@
+node_modules
+.next
+.git
+.gitignore
+
+# .env ships in the image on purpose: NEXT_PUBLIC_SITE_TITLE is a build-time
+# constant Next.js inlines into the bundle, so it has to be present at `docker
+# build` time. Its DB_*/NEXTAUTH_* values are placeholders overridden at
+# runtime by the real Cloud Run env vars deploy.sh sets — see deploy.sh.
+# .env.local and .env.deploy.yaml are dev-only / deploy-script-only and must
+# never end up in the image.
+.env.local
+.env*.local
+.env.deploy.yaml
+
+npm-debug.log*
+.DS_Store
+*.tsbuildinfo
+README.md
+ARCHITECTURE.md

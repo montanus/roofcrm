@@ -1,0 +1,92 @@
+# Claude Code on GitHub.
+#
+# Two triggers:
+#   - an issue labeled "agent" becomes a PR implementing it
+#   - "@claude" in a PR or issue comment gets a reply or a follow-up commit
+#
+# Setup once:
+#   gh secret set ANTHROPIC_API_KEY
+# or, to bill through your GCP project via Vertex AI instead, set the
+# WIF secrets below and switch the commented blocks.
+#
+# The agent never has GCP deploy permissions. Deploys are in deploy.yml
+# behind a manual approval.
+
+name: agent
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+concurrency:
+  group: agent-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    if: >
+      (github.event_name == 'issues' && github.event.label.name == 'agent') ||
+      (github.event_name != 'issues' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # --- Option B: Vertex AI via Workload Identity Federation (no stored keys)
+      # - uses: google-github-actions/auth@v2
+      #   with:
+      #     workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+      #     service_account: ${{ secrets.GCP_AGENT_SA }}
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          # --- Option A: direct API key
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # --- Option B: Vertex AI (uncomment, and remove anthropic_api_key)
+          # use_vertex: "true"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          trigger_phrase: "@claude"
+          label_trigger: "agent"
+          # The repo's .claude/settings.json deny list and hook still apply.
+          # This narrows further: the CI agent may only run these commands.
+          allowed_tools: >-
+            Bash(npm run build),
+            Bash(npm run lint),
+            Bash(npx tsc --noEmit),
+            Bash(npm run db:generate),
+            Bash(npm test),
+            Bash(git status *),
+            Bash(git diff *),
+            Bash(git log *),
+            Read,Edit,Write,Glob,Grep
+          custom_instructions: |
+            You are running in CI with no access to any database or secrets.
+            Follow CLAUDE.md. Read the matching spec in openspec/specs before
+            implementing. Open one PR per issue. Run `npm run build` and
+            `npx tsc --noEmit` before finishing and include their result in
+            the PR body. If the change needs a migration, say in the PR body
+            that a human must apply it to Cloud SQL.
+        env:
+          # Vertex only:
+          # CLOUD_ML_REGION: us-east5
+          # ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          NODE_ENV: test

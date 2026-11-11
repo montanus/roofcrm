@@ -13,8 +13,6 @@ const nextConfig = {
               {
                 key: "Access-Control-Allow-Origin",
                 value: "*",
-                // DOES NOT WORK
-                // value: process.env.ALLOWED_ORIGIN,
               },
               // Allows for specific methods accepted
               {

@@ -1,0 +1,68 @@
+# Skill evals in CI. Fails the build if the add-crm-field pass rate drops
+# below PASS_THRESHOLD. Runs when the skill, the evals, or this file change,
+# and nightly so drift in the model shows up even with no commits.
+
+name: evals
+
+on:
+  pull_request:
+    paths:
+      - ".claude/skills/**"
+      - "evals/**"
+      - ".github/workflows/evals.yml"
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PASS_THRESHOLD: "0.85"
+
+jobs:
+  promptfoo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          npx --yes promptfoo@latest eval \
+            -c evals/promptfooconfig.yaml \
+            --output evals/results.json \
+            --no-cache \
+            --max-concurrency 4 \
+            || true   # exit code reflects any single failure; our own threshold applies below
+
+      - name: Enforce pass rate
+        run: |
+          stats=$(jq '.results.stats' evals/results.json)
+          pass=$(echo "$stats" | jq '.successes')
+          fail=$(echo "$stats" | jq '.failures')
+          total=$((pass + fail))
+          rate=$(awk -v p="$pass" -v t="$total" 'BEGIN { if (t == 0) print 0; else printf "%.3f", p / t }')
+          cost=$(echo "$stats" | jq -r '.tokenUsage.total // "n/a"')
+          echo "pass=$pass fail=$fail rate=$rate threshold=$PASS_THRESHOLD total_tokens=$cost"
+          {
+            echo "## add-crm-field evals"
+            echo
+            echo "| passed | failed | pass rate | threshold | tokens |"
+            echo "|---|---|---|---|---|"
+            echo "| $pass | $fail | $rate | $PASS_THRESHOLD | $cost |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          awk -v r="$rate" -v t="$PASS_THRESHOLD" 'BEGIN { exit !(r >= t) }' \
+            || { echo "::error::pass rate $rate is below $PASS_THRESHOLD"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results
+          path: evals/results.json

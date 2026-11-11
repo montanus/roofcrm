@@ -1,0 +1,136 @@
+# Evals for the add-crm-field skill.
+#
+# Two suites:
+#   trigger  - given the skill list, does the model pick add-crm-field for
+#              prompts that should trigger it and NOT for ones that shouldn't?
+#   output   - given the skill text, does the plan name every file the skill
+#              requires, in order, and avoid the forbidden actions?
+#
+# Run:   npx promptfoo@latest eval -c evals/promptfooconfig.yaml
+# View:  npx promptfoo@latest view
+#
+# Each prompt runs 3 times (repeat: 3) so pass rate is measured, not a single
+# lucky sample. Token cost per test is in the results view and results.json.
+
+description: add-crm-field skill evals
+
+providers:
+  - id: anthropic:messages:claude-sonnet-5-5
+    config:
+      max_tokens: 1200
+      temperature: 1
+
+defaultTest:
+  options:
+    repeat: 3
+
+prompts:
+  - id: trigger
+    label: trigger
+    raw: |
+      You are a coding agent with these skills available. Reply with ONLY the
+      skill name you would invoke, or NONE.
+
+      Skills:
+      - add-crm-field: Add a new column to the customer table end to end — Drizzle schema, SQL migration, Zod validation, the add/edit form dialog, the customer card, and the README. Use whenever asked to add, track, or store a new piece of customer information (a field, column, attribute, or property on customers).
+      - code-review: Review the current diff for correctness bugs.
+      - init: Initialize a new CLAUDE.md file.
+
+      User request: {{request}}
+
+  - id: output
+    label: output
+    raw: |
+      {{skill}}
+
+      ---
+      You are working in the RL Spencer Roofing CRM repository described above.
+      User request: {{request}}
+
+      Write the step-by-step plan you will follow, naming each file you will
+      change and the command you will run. Do not write code yet.
+
+tests:
+  # ---- trigger: should fire ------------------------------------------------
+  - vars: { request: "add a roof color field to customers" }
+    options: { prompts: [trigger] }
+    assert: [{ type: icontains, value: add-crm-field }]
+  - vars: { request: "we need to track the insurance claim number for each job" }
+    options: { prompts: [trigger] }
+    assert: [{ type: icontains, value: add-crm-field }]
+  - vars: { request: "can the customer card show a second phone number? store it too" }
+    options: { prompts: [trigger] }
+    assert: [{ type: icontains, value: add-crm-field }]
+  - vars: { request: "store the date the permit was approved on the customer" }
+    options: { prompts: [trigger] }
+    assert: [{ type: icontains, value: add-crm-field }]
+  - vars: { request: "add a boolean for whether the deposit has been paid" }
+    options: { prompts: [trigger] }
+    assert: [{ type: icontains, value: add-crm-field }]
+  - vars: { request: "I want to record the square footage of each roof" }
+    options: { prompts: [trigger] }
+    assert: [{ type: icontains, value: add-crm-field }]
+  - vars: { request: "customers need a 'referred by' attribute" }
+    options: { prompts: [trigger] }
+    assert: [{ type: icontains, value: add-crm-field }]
+  - vars: { request: "new column on customer: warranty_years int" }
+    options: { prompts: [trigger] }
+    assert: [{ type: icontains, value: add-crm-field }]
+
+  # ---- trigger: should NOT fire -------------------------------------------
+  - vars: { request: "add a field to the notes table for the author" }
+    options: { prompts: [trigger] }
+    assert: [{ type: not-icontains, value: add-crm-field }]
+  - vars: { request: "review my changes for bugs" }
+    options: { prompts: [trigger] }
+    assert: [{ type: not-icontains, value: add-crm-field }]
+  - vars: { request: "the price field shows NaN when empty, fix it" }
+    options: { prompts: [trigger] }
+    assert: [{ type: not-icontains, value: add-crm-field }]
+  - vars: { request: "rename the Comments label on the form to Summary" }
+    options: { prompts: [trigger] }
+    assert: [{ type: not-icontains, value: add-crm-field }]
+  - vars: { request: "add a new stage called Warranty to the pipeline" }
+    options: { prompts: [trigger] }
+    assert: [{ type: not-icontains, value: add-crm-field }]
+  - vars: { request: "set up a CLAUDE.md for this repo" }
+    options: { prompts: [trigger] }
+    assert: [{ type: not-icontains, value: add-crm-field }]
+
+  # ---- output: plan quality -----------------------------------------------
+  - vars:
+      request: "add a roof color field to customers"
+      skill: file://../.claude/skills/add-crm-field/SKILL.md
+    options: { prompts: [output] }
+    assert:
+      - { type: icontains, value: "app/db/schema.ts" }
+      - { type: icontains, value: "db:generate" }
+      - { type: icontains, value: "validation.ts" }
+      - { type: icontains, value: "CustomerFormDialog.tsx" }
+      - { type: icontains, value: "CustomerCard.tsx" }
+      - { type: icontains, value: "README.md" }
+      - { type: not-icontains, value: "db:push" }
+      - { type: not-icontains, value: "notes table" }
+      - type: llm-rubric
+        value: The plan lists the schema change before the migration, and the migration before the validation change.
+  - vars:
+      request: "track whether the deposit has been paid, required, default false"
+      skill: file://../.claude/skills/add-crm-field/SKILL.md
+    options: { prompts: [output] }
+    assert:
+      - { type: icontains, value: "app/db/schema.ts" }
+      - { type: icontains, value: "validation.ts" }
+      - { type: icontains, value: "CustomerFormDialog.tsx" }
+      - { type: not-icontains, value: "db:push" }
+      - type: llm-rubric
+        value: The plan says the column is NOT NULL with a default and explains that existing rows get the default, or explicitly warns about adding a required column to a table with existing rows.
+  - vars:
+      request: "add an insurance carrier dropdown on customers with options State Farm, Allstate, Other"
+      skill: file://../.claude/skills/add-crm-field/SKILL.md
+    options: { prompts: [output] }
+    assert:
+      - { type: icontains, value: "constants.ts" }
+      - { type: icontains, value: "validation.ts" }
+      - { type: icontains, value: "CustomerFormDialog.tsx" }
+      - type: llm-rubric
+        value: The plan adds an enum array to constants.ts and uses z.enum in validation, and uses the select-style TextField pattern in the form.

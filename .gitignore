@@ -30,7 +30,14 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+.env.deploy.yaml
 
 # vercel
 .vercel
 .next
+
+# typescript
+*.tsbuildinfo
+# promptfoo evals
+/evals/results.json
+/.promptfoo/

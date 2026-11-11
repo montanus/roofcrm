@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build)",
+      "Bash(npm run build *)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint *)",
+      "Bash(npm run db:generate)",
+      "Bash(npm run db:generate *)",
+      "Bash(npm test)",
+      "Bash(npm test *)",
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)",
+      "Bash(npm audit *)",
+      "Bash(node -e ' *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Write(./.env)",
+      "Write(./.env.*)",
+      "Bash(npm run db:push)",
+      "Bash(npm run db:push *)",
+      "Bash(npx drizzle-kit push *)",
+      "Bash(./deploy.sh)",
+      "Bash(./deploy.sh *)",
+      "Bash(bash deploy.sh *)",
+      "Bash(gcloud run deploy *)",
+      "Bash(gcloud builds submit *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(mysql *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|Read|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-risky.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

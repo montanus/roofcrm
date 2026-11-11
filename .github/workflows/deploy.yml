@@ -1,0 +1,74 @@
+# Production deploy. Manual trigger only, and the "production" environment
+# must be configured in repo settings with at least one required reviewer so
+# every run waits for a human approval.
+#
+# Auth is Workload Identity Federation: GitHub's OIDC token is exchanged for a
+# short-lived GCP access token. No service-account key is stored anywhere.
+#
+# One-time GCP setup (replace PROJECT_NUMBER / PROJECT_ID / OWNER/REPO):
+#   gcloud iam workload-identity-pools create github --location=global
+#   gcloud iam workload-identity-pools providers create-oidc github \
+#     --location=global --workload-identity-pool=github \
+#     --issuer-uri=https://token.actions.githubusercontent.com \
+#     --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+#     --attribute-condition="assertion.repository == 'OWNER/REPO'"
+#   gcloud iam service-accounts create roofcrm-deployer
+#   gcloud iam service-accounts add-iam-policy-binding \
+#     roofcrm-deployer@PROJECT_ID.iam.gserviceaccount.com \
+#     --role=roles/iam.workloadIdentityUser \
+#     --member="principalSet://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/OWNER/REPO"
+#   # then grant roofcrm-deployer: roles/run.admin, roles/cloudbuild.builds.editor,
+#   # roles/artifactregistry.writer, roles/iam.serviceAccountUser on the Cloud Run SA
+#
+# Secrets:
+#   GCP_WIF_PROVIDER   projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github
+#   GCP_DEPLOY_SA      roofcrm-deployer@PROJECT_ID.iam.gserviceaccount.com
+#   ENV_DEPLOY_YAML    full contents of .env.deploy.yaml (or move these to Secret Manager
+#                      and switch deploy.sh to --set-secrets)
+
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to deploy"
+        required: true
+        default: main
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production      # required reviewers are configured here
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Write runtime env file
+        run: |
+          umask 077
+          printf '%s\n' "${{ secrets.ENV_DEPLOY_YAML }}" > .env.deploy.yaml
+
+      - name: Build and deploy
+        run: ./deploy.sh --yes
+
+      - name: Remove env file
+        if: always()
+        run: rm -f .env.deploy.yaml
