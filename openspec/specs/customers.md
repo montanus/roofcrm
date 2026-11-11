@@ -23,6 +23,10 @@ A customer is one roofing lead or job. It moves through the stages in
 7. Deleting a customer is a hard delete. Notes for that customer are not
    cascaded by the app; the DB owns that.
 8. Boards are filtered by `?stage=&rep=&q=` search params on the server.
+9. A customer created from the add-customer form starts in the `Needs Quote`
+   stage (`defaultJobStage` in `app/lib/constants.ts`) unless the user picks
+   another stage. Editing keeps the customer's stored stage. Customers created
+   by the `/api/contactform` route still start in `Internet`.
 
 ## Out of scope
 
