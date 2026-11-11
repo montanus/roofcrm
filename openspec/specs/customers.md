@@ -23,6 +23,8 @@ A customer is one roofing lead or job. It moves through the stages in
 7. Deleting a customer is a hard delete. Notes for that customer are not
    cascaded by the app; the DB owns that.
 8. Boards are filtered by `?stage=&rep=&q=` search params on the server.
+9. The Add Customer form defaults the stage to `Needs Quote`; editing a customer
+   keeps that customer's current stage selected.
 
 ## Out of scope
 
