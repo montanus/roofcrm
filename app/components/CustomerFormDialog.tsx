@@ -118,7 +118,7 @@ export default function CustomerFormDialog({
                   label="Stage"
                   select
                   slotProps={{ select: { native: true } }}
-                  defaultValue={customer?.stage ?? jobStages[0]}
+                  defaultValue={customer?.stage ?? "Needs Quote"}
                   fullWidth
                   required
                 >
